@@ -58,7 +58,8 @@ private:
     int maxIteration_;
     int maxError_;
     QVector<double> errors_;
-    QMutex errorlock_;
+    QMutex mutex_;
+    int count_;
 };
 
 #endif // MAINWINDOW_H

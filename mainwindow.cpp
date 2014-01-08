@@ -23,12 +23,7 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    ui->customPlot_ErrorPlot->addGraph();
-
     nbn_ = new NBN();
-
-    QObject::connect(this, SIGNAL(errorReady(int)), this, SLOT(on_errorReady(int)),
-                     Qt::QueuedConnection);
 }
 
 MainWindow::~MainWindow()
@@ -177,6 +172,7 @@ void MainWindow::on_pushButton_Train_clicked()
     totalRun_ = ui->lineEdit_totalRuns->text().toInt();
     maxIteration_ = ui->lineEdit_maxIteration->text().toInt();
     maxError_ = ui->lineEdit_maxError->text().toDouble();
+    count_ = 0;
 
     QFutureWatcher<void> *watcher = new QFutureWatcher<void>;
     QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_trainingFinished()));
@@ -199,32 +195,6 @@ void MainWindow::on_trainingFinished()
     QProgressBar *progressBar =
             ui->statusBar->findChild<QProgressBar *>(QString(), Qt::FindDirectChildrenOnly);
     ui->statusBar->removeWidget(progressBar);
-    QVector<double> x;
-    for (int i = 0; i < errors_.size(); ++i)
-        x.push_back(i);
-    errorlock_.lock();
-    ui->customPlot_ErrorPlot->graph(0)->setData(x, errors_);
-    ui->customPlot_ErrorPlot->replot();
-    errorlock_.unlock();
-
-    QVector<double> x(101), y(101); // initialize with entries 0..100
-    for (int i=0; i<101; ++i)
-    {
-      x[i] = i/50.0 - 1; // x goes from -1 to 1
-      y[i] = x[i]*x[i]; // let's plot a quadratic function
-    }
-
-
-    // create graph and assign data to it:
-    customPlot->addGraph();
-    customPlot->graph(0)->setData(x, y);
-    // give the axes some labels:
-    customPlot->xAxis->setLabel("x");
-    customPlot->yAxis->setLabel("y");
-    // set axes ranges, so we see all data:
-    customPlot->xAxis->setRange(-1, 1);
-    customPlot->yAxis->setRange(0, 1);
-    customPlot->replot();
 }
 
 void MainWindow::training()
@@ -250,23 +220,35 @@ void MainWindow::training()
     for (int runs = 0; runs < totalRun_; ++runs) {
         nbn_->init_default();
         nbn_->train(inputs, desired_outputs, maxIteration_, maxError_);
-        errorlock_.lock();
+        mutex_.lock();
         errors_ = QVector<double>::fromStdVector(nbn_->get_error());
-        errorlock_.unlock();
-        emit errorReady(runs);
+        mutex_.unlock();
+        QMetaObject::invokeMethod(this, "on_errorReady", Qt::QueuedConnection,
+                                  Q_ARG(int, runs + 1));
     }
 }
 
 void MainWindow::on_errorReady(int runs)
 {
     QVector<double> x;
-    for (int i = 0; i < errors_.size(); ++i)
+    double errmin = errors_[0], errmax = errors_[0];
+    for (int i = 0; i < errors_.size(); ++i) {
         x.push_back(i);
-    errorlock_.lock();
-    ui->customPlot_ErrorPlot->graph()->addData(x, errors_);
+        if (errors_[i] < errmin) errmin = errors_[i];
+        if (errors_[i] > errmax) errmax = errors_[i];
+    }
+    mutex_.lock();
+    ui->customPlot_ErrorPlot->addGraph();
+    ui->customPlot_ErrorPlot->yAxis->setScaleType(QCPAxis::stLogarithmic);
+    ui->customPlot_ErrorPlot->yAxis->setNumberFormat("b");
+    ui->customPlot_ErrorPlot->yAxis->setNumberPrecision(0);
+    ui->customPlot_ErrorPlot->xAxis->setRange(0, errors_.size());
+    ui->customPlot_ErrorPlot->yAxis->setRange(errmin, errmax);
+    ui->customPlot_ErrorPlot->graph()->setData(x, errors_);
+    ui->customPlot_ErrorPlot->replot();
     qDebug() << errors_ << endl;
     QProgressBar *progressBar =
             ui->statusBar->findChild<QProgressBar *>(QString(), Qt::FindDirectChildrenOnly);
     progressBar->setValue(runs);
-    errorlock_.unlock();
+    mutex_.unlock();
 }
