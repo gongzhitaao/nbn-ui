@@ -57,19 +57,29 @@
        <item row="1" column="0">
         <widget class="QStackedWidget" name="stackedWidget_AlgorithmParam">
          <property name="currentIndex">
-          <number>0</number>
+          <number>1</number>
          </property>
          <widget class="QWidget" name="page">
           <layout class="QGridLayout" name="gridLayout_4">
-           <item row="0" column="0">
+           <item row="0" column="0" colspan="2">
             <widget class="QLabel" name="label_5">
              <property name="text">
-              <string>TextLabel</string>
+              <string>Learning Rate</string>
              </property>
             </widget>
            </item>
-           <item row="0" column="1">
+           <item row="0" column="2">
             <widget class="QLineEdit" name="lineEdit_5"/>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_11">
+             <property name="text">
+              <string>Momentum</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1" colspan="2">
+            <widget class="QLineEdit" name="lineEdit_11"/>
            </item>
           </layout>
          </widget>
@@ -241,12 +251,12 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="pushButton_Data">
+       <widget class="QPushButton" name="pushButton_ClearPlot">
         <property name="enabled">
          <bool>false</bool>
         </property>
         <property name="text">
-         <string>Data</string>
+         <string>Clear Plot</string>
         </property>
        </widget>
       </item>

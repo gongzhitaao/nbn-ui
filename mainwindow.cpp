@@ -2,8 +2,9 @@
 #include "ui_mainwindow.h"
 
 #include <fstream>
-#include <vector>
+#include <limits>
 #include <sstream>
+#include <vector>
 
 #include <QProgressBar>
 #include <QtConcurrent/QtConcurrent>
@@ -11,25 +12,45 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFlags>
-#include <QFutureWatcher>
 
 #include "nbn.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    ui(new Ui::MainWindow),
-    lastConfPath_(QDir::currentPath()),
-    lastDataPath_(QDir::currentPath())
+    ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 
+    // Using logarithm for Y axis
+    ui->customPlot_ErrorPlot->yAxis->setScaleType(QCPAxis::stLogarithmic);
+    ui->customPlot_ErrorPlot->yAxis->setNumberFormat("eb");
+    ui->customPlot_ErrorPlot->yAxis->setNumberPrecision(0);
+
+    lastConfPath_ = QDir::currentPath();
+    lastDataPath_ = QDir::currentPath();
+    dataFile_ = QString("");
+
     nbn_ = new NBN();
+    totalRun_ = 0;
+    maxIteration_ = 0;
+    maxError_ = 0.0;
+    failcount_ = 0;
+
+    progressBar_ = new QProgressBar(ui->statusBar);
+    progressBar_->setHidden(true);
+    progressBar_->setAlignment(Qt::AlignRight);
+    progressBar_->setMaximumSize(180, 19);
+    progressBar_->setFormat("%v / %m");
+    ui->statusBar->addPermanentWidget(progressBar_);
+    progressBar_->setMaximum(totalRun_);
+    progressBar_->setValue(0);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
     delete nbn_;
+    delete progressBar_;
 }
 
 void MainWindow::on_comboBox_Algorithm_currentIndexChanged(int index)
@@ -43,19 +64,14 @@ void MainWindow::on_pushButton_Configuration_clicked()
                 this, tr("Open Configuration File"), lastConfPath_,
                 "Conf files (*.in);;Text files (*.txt);;All files (*.*)");
 
-    if (!fileName.isNull() && !fileName.isEmpty()) {
-        lastConfPath_ = QFileInfo(fileName).path();
+    if (fileName.isNull() || fileName.isEmpty()) return;
 
-        QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
-        QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_parsingFinished()));
+    lastConfPath_ = QFileInfo(fileName).path();
 
-        QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
-        watcher->setFuture(parser);
-    }
-}
-
-void MainWindow::on_actionParameter_triggered()
-{
+    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
+    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_parsingFinished()));
+    QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
+    watcher->setFuture(parser);
 }
 
 void MainWindow::on_actionConfiguration_triggered()
@@ -69,14 +85,12 @@ void MainWindow::on_actionConfiguration_triggered()
 
     QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
     QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_parsingFinished()));
-
     QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
     watcher->setFuture(parser);
 }
 
 void MainWindow::on_parsingFinished()
 {
-    ui->pushButton_Data->setEnabled(true);
     ui->pushButton_Train->setEnabled(true);
 }
 
@@ -144,6 +158,9 @@ bool MainWindow::configuration(const QString &fileName)
     }
 
     nbn_->set_topology(topology.toStdVector());
+
+    nbn_->init_default();
+
     nbn_->set_gains(gains.toStdVector());
     nbn_->set_activations(activations.toStdVector());
 
@@ -155,49 +172,42 @@ void MainWindow::on_actionExit_triggered()
     this->close();
 }
 
-void MainWindow::on_pushButton_Data_clicked()
-{
-    QString fileName = QFileDialog::getOpenFileName(
-                this, tr("Open Configuration File"), lastDataPath_,
-                "Text files (*.txt);;All files (*.*)");
-
-    if (!fileName.isNull() && !fileName.isEmpty()) {
-        lastDataPath_ = QFileInfo(fileName).path();
-        dataFile_ = fileName;
-    }
-}
-
 void MainWindow::on_pushButton_Train_clicked()
 {
     totalRun_ = ui->lineEdit_totalRuns->text().toInt();
     maxIteration_ = ui->lineEdit_maxIteration->text().toInt();
     maxError_ = ui->lineEdit_maxError->text().toDouble();
-    count_ = 0;
 
-    QFutureWatcher<void> *watcher = new QFutureWatcher<void>;
+    ui->customPlot_ErrorPlot->xAxis->setRange(0, maxIteration_);
+
+    errormin_ = std::numeric_limits<double>::max();
+    errormax_ = std::numeric_limits<double>::min();
+    errorcur_ = std::numeric_limits<double>::max();
+
+    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
     QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_trainingFinished()));
-
-    QFuture<void> training = QtConcurrent::run(this, &MainWindow::training);
+    QFuture<bool> training = QtConcurrent::run(this, &MainWindow::training);
     watcher->setFuture(training);
 
-    QProgressBar *progressBar = new QProgressBar(ui->statusBar);
-    progressBar->setAlignment(Qt::AlignRight);
-    progressBar->setMaximumSize(180, 19);
-    progressBar->setFormat("%v / %m");
-    ui->statusBar->addPermanentWidget(progressBar);
-    progressBar->setMaximum(totalRun_);
-    progressBar->setValue(0);
-
+    progressBar_->setMaximum(totalRun_);
+    progressBar_->setValue(0);
+    progressBar_->setHidden(false);
 }
 
 void MainWindow::on_trainingFinished()
 {
-    QProgressBar *progressBar =
-            ui->statusBar->findChild<QProgressBar *>(QString(), Qt::FindDirectChildrenOnly);
-    ui->statusBar->removeWidget(progressBar);
+    progressBar_->setHidden(true);
+
+    if (failcount_ < totalRun_)
+        nbn_->set_weight(weights_.toStdVector());
+
+//    if (success) {
+//        ui->pushButton_ClearPlot->setEnabled(true);
+//        ui->pushButton_Validate->setEnabled(true);
+//    }
 }
 
-void MainWindow::training()
+bool MainWindow::training()
 {
     std::vector<double> inputs, desired_outputs;
     {
@@ -218,37 +228,47 @@ void MainWindow::training()
     }
 
     for (int runs = 0; runs < totalRun_; ++runs) {
-        nbn_->init_default();
-        nbn_->train(inputs, desired_outputs, maxIteration_, maxError_);
+        nbn_->random_weights();
+        bool success = nbn_->train(inputs, desired_outputs, maxIteration_, maxError_);
+
+        // This mutex will be released in on_errorReady() when the plotting of
+        // current errors is finished.  This may incur some delay, but most of
+        // time, it's unnoticable.
         mutex_.lock();
+
+        if (!success) ++failcount_;
+
         errors_ = QVector<double>::fromStdVector(nbn_->get_error());
-        mutex_.unlock();
+
+        if (errors_.back() < errorcur_) {
+            errorcur_ = errors_.back();
+            weights_ = QVector<double>::fromStdVector(nbn_->get_weight());
+        }
+
         QMetaObject::invokeMethod(this, "on_errorReady", Qt::QueuedConnection,
                                   Q_ARG(int, runs + 1));
     }
+    return true;
 }
 
 void MainWindow::on_errorReady(int runs)
 {
     QVector<double> x;
-    double errmin = errors_[0], errmax = errors_[0];
     for (int i = 0; i < errors_.size(); ++i) {
         x.push_back(i);
-        if (errors_[i] < errmin) errmin = errors_[i];
-        if (errors_[i] > errmax) errmax = errors_[i];
+        if (errors_[i] < errormin_) errormin_ = errors_[i];
+        if (errors_[i] > errormax_) errormax_ = errors_[i];
     }
-    mutex_.lock();
     ui->customPlot_ErrorPlot->addGraph();
-    ui->customPlot_ErrorPlot->yAxis->setScaleType(QCPAxis::stLogarithmic);
-    ui->customPlot_ErrorPlot->yAxis->setNumberFormat("b");
-    ui->customPlot_ErrorPlot->yAxis->setNumberPrecision(0);
-    ui->customPlot_ErrorPlot->xAxis->setRange(0, errors_.size());
-    ui->customPlot_ErrorPlot->yAxis->setRange(errmin, errmax);
+    ui->customPlot_ErrorPlot->yAxis->setRange(errormin_, errormax_);
     ui->customPlot_ErrorPlot->graph()->setData(x, errors_);
     ui->customPlot_ErrorPlot->replot();
-    qDebug() << errors_ << endl;
-    QProgressBar *progressBar =
-            ui->statusBar->findChild<QProgressBar *>(QString(), Qt::FindDirectChildrenOnly);
-    progressBar->setValue(runs);
+    progressBar_->setValue(runs);
+
+    // Current errors are finished, release the mutex.
     mutex_.unlock();
+}
+
+void MainWindow::on_pushButton_ClearPlot_clicked()
+{
 }
