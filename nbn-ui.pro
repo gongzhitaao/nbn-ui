@@ -15,17 +15,13 @@ TEMPLATE = app
 SOURCES += main.cpp\
         mainwindow.cpp \
     qcustomplot.cpp \
-    parserthread.cpp \
     nbn.cpp \
-    nninfomodel.cpp \
-    trainthread.cpp
+    util.cpp
 
 HEADERS  += mainwindow.h \
     qcustomplot.h \
-    parserthread.h \
     nbn.h \
-    nninfomodel.h \
-    trainthread.h
+    util.h
 
 FORMS    += mainwindow.ui
 

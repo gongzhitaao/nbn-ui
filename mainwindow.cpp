@@ -6,45 +6,34 @@
 #include <sstream>
 
 #include <QProgressBar>
-
+#include <QtConcurrent/QtConcurrent>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
-
-#include "parserthread.h"
-#include "trainthread.h"
-#include "nninfomodel.h"
+#include <QFlags>
+#include <QFutureWatcher>
 
 #include "nbn.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
-    errors_("ErrorData"),
     ui(new Ui::MainWindow),
     lastConfPath_(QDir::currentPath()),
     lastDataPath_(QDir::currentPath())
 {
     ui->setupUi(this);
 
-    QProgressBar *progressBar = new QProgressBar(ui->statusBar);
-    progressBar->setAlignment(Qt::AlignRight);
-    progressBar->setMaximumSize(180, 19);
-    progressBar->setFormat("%v / %m");
-    ui->statusBar->addPermanentWidget(progressBar);
-    progressBar->setValue(0);
-
     ui->customPlot_ErrorPlot->addGraph();
 
-    info_ = new NNInfoModel;
-    ui->tableView_Information->setModel(info_);
-
     nbn_ = new NBN();
+
+    QObject::connect(this, SIGNAL(errorReady(int)), this, SLOT(on_errorReady(int)),
+                     Qt::QueuedConnection);
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
-    delete info_;
     delete nbn_;
 }
 
@@ -55,7 +44,19 @@ void MainWindow::on_comboBox_Algorithm_currentIndexChanged(int index)
 
 void MainWindow::on_pushButton_Configuration_clicked()
 {
-    configuration();
+    QString fileName = QFileDialog::getOpenFileName(
+                this, tr("Open Configuration File"), lastConfPath_,
+                "Conf files (*.in);;Text files (*.txt);;All files (*.*)");
+
+    if (!fileName.isNull() && !fileName.isEmpty()) {
+        lastConfPath_ = QFileInfo(fileName).path();
+
+        QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
+        QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_parsingFinished()));
+
+        QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
+        watcher->setFuture(parser);
+    }
 }
 
 void MainWindow::on_actionParameter_triggered()
@@ -64,45 +65,94 @@ void MainWindow::on_actionParameter_triggered()
 
 void MainWindow::on_actionConfiguration_triggered()
 {
-    configuration();
+    QString fileName = QFileDialog::getOpenFileName(
+                this, tr("Open Configuration File"), lastConfPath_,
+                "Conf files (*.in);;Text files (*.txt);;All files (*.*)");
+
+    if (!fileName.isNull() && !fileName.isEmpty())
+        lastConfPath_ = QFileInfo(fileName).path();
+
+    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
+    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_parsingFinished()));
+
+    QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
+    watcher->setFuture(parser);
 }
 
-void MainWindow::on_parsing_finished()
+void MainWindow::on_parsingFinished()
 {
     ui->pushButton_Data->setEnabled(true);
     ui->pushButton_Train->setEnabled(true);
 }
 
-void MainWindow::on_training_udpated()
+bool MainWindow::configuration(const QString &fileName)
 {
-    std::vector<double> auxvec;
-    errors_.lock();
-    double *ptr = (double *)errors_.data();
-    auxvec.insert(auxvec.end(), ptr, ptr + errors_.size());
+    QVector<int> topology, outputs;
+    QVector<double> gains, weights;
+    QVector<NBN::nbn_activation_func_enum> activations;
 
-    QVector<double> yval = QVector<double>::fromStdVector(auxvec);
-    QVector<double> xval;
-    for (int i = 0; i < yval.size(); ++i)
-        xval.append(i);
-    ui->customPlot_ErrorPlot->graph()->addData(xval, yval);
-    ui->customPlot_ErrorPlot->replot();
+    QVector<QString> types;
 
-    errors_.unlock();
-    errors_.detach();
-}
+    QFile file(fileName);
+    file.open(QFile::ReadOnly);
+    QTextStream in(&file);
 
-void MainWindow::configuration()
-{
-    QString fileName = QFileDialog::getOpenFileName(
-                this, tr("Open Configuration File"), lastConfPath_,
-                "Text files (*.txt);;All files (*.*)");
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
 
-    if (!fileName.isNull() && !fileName.isEmpty())
-        lastConfPath_ = QFileInfo(fileName).path();
+        if (line.isEmpty() || line.startsWith("//")) continue;
 
-    ParserThread *t = new ParserThread(nbn_, fileName);
-    QObject::connect(t, SIGNAL(finished()), this, SLOT(on_parsing_finished()));
-    t->start();
+        if (line.startsWith('n')) {
+            QStringList list = line.split(QRegExp("\\s+"), QString::SkipEmptyParts);
+
+            qDebug() << list << endl;
+
+            // neuron id
+            topology.push_back(list[1].toInt());
+
+            // neuron type
+            types.push_back(list[2]);
+
+            // neuron inputs
+            for (int i = 3; i < list.size(); ++i)
+                topology.push_back(list[i].toInt());
+
+        } else if (line.startsWith('w')) {
+            QStringList list = line.split(QRegExp("\\s+"), QString::SkipEmptyParts);
+            qDebug() << list << endl;
+            for (int i = 1; i < list.size(); ++i)
+                weights.push_back(list[i].toDouble());
+        } else if (line.startsWith(".model")) {
+            QStringList list = line.split(QRegExp(",|\\s+"), QString::SkipEmptyParts);
+            qDebug() << list << endl;
+
+            for (int i = 2; i < list.size(); ++i) {
+                if (list[i].startsWith("fun")) {
+                    if (list[i].endsWith("lin")) activations.push_back(NBN::NBN_LINEAR);
+                    else if (list[i].endsWith("uni")) activations.push_back(NBN::NBN_SIGMOID);
+                    else activations.push_back(NBN::NBN_SIGMOID_SYMMETRIC);
+                } else if (list[i].startsWith("gain")) {
+                    QRegExp rx("(\\d+\\.?|\\d*\\.\\d+)");
+                    rx.indexIn(list[i]);
+                    gains.push_back(rx.cap(1).toDouble());
+                } else {
+                    QRegExp rx("(\\d+\\.?|\\d*\\.\\d+)");
+                    rx.indexIn(list[i]);
+//                    model.der = rx.cap(1).toDouble();
+                }
+            }
+        } else if (line.startsWith("datafile")) {
+            QFileInfo info(file);
+            dataFile_ = info.absoluteDir().filePath(line.right(line.length() - line.lastIndexOf('=') - 1));
+            qDebug() << dataFile_ << endl;
+        }
+    }
+
+    nbn_->set_topology(topology.toStdVector());
+    nbn_->set_gains(gains.toStdVector());
+    nbn_->set_activations(activations.toStdVector());
+
+    return true;
 }
 
 void MainWindow::on_actionExit_triggered()
@@ -124,10 +174,99 @@ void MainWindow::on_pushButton_Data_clicked()
 
 void MainWindow::on_pushButton_Train_clicked()
 {
-    TrainThread *t = new TrainThread(nbn_, ui->lineEdit_runs->text().toInt(),
-                                     ui->lineEdit_maxIteration->text().toInt(),
-                                     ui->lineEdit_maxError->text().toDouble(),
-                                     dataFile_);
-    QObject::connect(t, SIGNAL(update()), this, SLOT(on_training_updated()));
-    t->start();
+    totalRun_ = ui->lineEdit_totalRuns->text().toInt();
+    maxIteration_ = ui->lineEdit_maxIteration->text().toInt();
+    maxError_ = ui->lineEdit_maxError->text().toDouble();
+
+    QFutureWatcher<void> *watcher = new QFutureWatcher<void>;
+    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_trainingFinished()));
+
+    QFuture<void> training = QtConcurrent::run(this, &MainWindow::training);
+    watcher->setFuture(training);
+
+    QProgressBar *progressBar = new QProgressBar(ui->statusBar);
+    progressBar->setAlignment(Qt::AlignRight);
+    progressBar->setMaximumSize(180, 19);
+    progressBar->setFormat("%v / %m");
+    ui->statusBar->addPermanentWidget(progressBar);
+    progressBar->setMaximum(totalRun_);
+    progressBar->setValue(0);
+
+}
+
+void MainWindow::on_trainingFinished()
+{
+    QProgressBar *progressBar =
+            ui->statusBar->findChild<QProgressBar *>(QString(), Qt::FindDirectChildrenOnly);
+    ui->statusBar->removeWidget(progressBar);
+    QVector<double> x;
+    for (int i = 0; i < errors_.size(); ++i)
+        x.push_back(i);
+    errorlock_.lock();
+    ui->customPlot_ErrorPlot->graph(0)->setData(x, errors_);
+    ui->customPlot_ErrorPlot->replot();
+    errorlock_.unlock();
+
+    QVector<double> x(101), y(101); // initialize with entries 0..100
+    for (int i=0; i<101; ++i)
+    {
+      x[i] = i/50.0 - 1; // x goes from -1 to 1
+      y[i] = x[i]*x[i]; // let's plot a quadratic function
+    }
+
+
+    // create graph and assign data to it:
+    customPlot->addGraph();
+    customPlot->graph(0)->setData(x, y);
+    // give the axes some labels:
+    customPlot->xAxis->setLabel("x");
+    customPlot->yAxis->setLabel("y");
+    // set axes ranges, so we see all data:
+    customPlot->xAxis->setRange(-1, 1);
+    customPlot->yAxis->setRange(0, 1);
+    customPlot->replot();
+}
+
+void MainWindow::training()
+{
+    std::vector<double> inputs, desired_outputs;
+    {
+        const int num_input = nbn_->get_num_input();
+        const int num_output = nbn_->get_num_output();
+        double x;
+        std::ifstream fin(dataFile_.toStdString());
+        while (true) {
+            int i;
+            for (i = 0; i < num_input && fin >> x; ++i)
+                inputs.push_back(x);
+
+            if (i < num_input) break;
+
+            for (i = 0; i < num_output && fin >> x; ++i)
+                desired_outputs.push_back(x);
+        }
+    }
+
+    for (int runs = 0; runs < totalRun_; ++runs) {
+        nbn_->init_default();
+        nbn_->train(inputs, desired_outputs, maxIteration_, maxError_);
+        errorlock_.lock();
+        errors_ = QVector<double>::fromStdVector(nbn_->get_error());
+        errorlock_.unlock();
+        emit errorReady(runs);
+    }
+}
+
+void MainWindow::on_errorReady(int runs)
+{
+    QVector<double> x;
+    for (int i = 0; i < errors_.size(); ++i)
+        x.push_back(i);
+    errorlock_.lock();
+    ui->customPlot_ErrorPlot->graph()->addData(x, errors_);
+    qDebug() << errors_ << endl;
+    QProgressBar *progressBar =
+            ui->statusBar->findChild<QProgressBar *>(QString(), Qt::FindDirectChildrenOnly);
+    progressBar->setValue(runs);
+    errorlock_.unlock();
 }

@@ -2,14 +2,13 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QSharedMemory>
+#include <QMutex>
 
 namespace Ui {
 class MainWindow;
 }
 
 class NBN;
-class NNInfoModel;
 
 class MainWindow : public QMainWindow
 {
@@ -19,10 +18,15 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
-private slots:
-    void on_parsing_finished();
+signals:
+    void errorReady(int);
 
-    void on_training_udpated();
+private slots:
+    void on_parsingFinished();
+
+    void on_errorReady(int);
+
+    void on_trainingFinished();
 
     void on_comboBox_Algorithm_currentIndexChanged(int index);
 
@@ -32,7 +36,6 @@ private slots:
 
     void on_actionConfiguration_triggered();
 
-
     void on_actionExit_triggered();
 
     void on_pushButton_Data_clicked();
@@ -40,19 +43,22 @@ private slots:
     void on_pushButton_Train_clicked();
 
 private:
-    void configuration();
+    bool configuration(const QString &fileName);
+    void training();
 
     Ui::MainWindow *ui;
-    QSharedMemory errors_;
-
-    NNInfoModel *info_;
 
     QString lastConfPath_;
     QString lastDataPath_;
     QString dataFile_;
+
     NBN *nbn_;
 
-
+    int totalRun_;
+    int maxIteration_;
+    int maxError_;
+    QVector<double> errors_;
+    QMutex errorlock_;
 };
 
 #endif // MAINWINDOW_H
