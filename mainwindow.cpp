@@ -35,6 +35,10 @@ MainWindow::MainWindow(QWidget *parent) :
     maxIteration_ = 0;
     maxError_ = 0.0;
     failcount_ = 0;
+    averageTime_ = 0.0;
+
+    training_ = false;
+    canceled_ = false;
 
     progressBar_ = new QProgressBar(ui->statusBar);
     progressBar_->setHidden(true);
@@ -69,27 +73,12 @@ void MainWindow::on_pushButton_Configuration_clicked()
     lastConfPath_ = QFileInfo(fileName).path();
 
     QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
-    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_parsingFinished()));
+    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_my_parsingFinished()));
     QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
     watcher->setFuture(parser);
 }
 
-void MainWindow::on_actionConfiguration_triggered()
-{
-    QString fileName = QFileDialog::getOpenFileName(
-                this, tr("Open Configuration File"), lastConfPath_,
-                "Conf files (*.in);;Text files (*.txt);;All files (*.*)");
-
-    if (!fileName.isNull() && !fileName.isEmpty())
-        lastConfPath_ = QFileInfo(fileName).path();
-
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
-    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_parsingFinished()));
-    QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
-    watcher->setFuture(parser);
-}
-
-void MainWindow::on_parsingFinished()
+void MainWindow::on_my_parsingFinished()
 {
     ui->pushButton_Train->setEnabled(true);
 }
@@ -174,40 +163,70 @@ void MainWindow::on_actionExit_triggered()
 
 void MainWindow::on_pushButton_Train_clicked()
 {
-    totalRun_ = ui->lineEdit_totalRuns->text().toInt();
-    maxIteration_ = ui->lineEdit_maxIteration->text().toInt();
-    maxError_ = ui->lineEdit_maxError->text().toDouble();
+    if (training_) {
+        ui->pushButton_Train->setText("Stopping...");
+        mutex_cancel_.lock();
+        canceled_ = true;
+        mutex_cancel_.unlock();
+    } else {
+        training_ = true;
+        canceled_ = false;
 
-    ui->customPlot_ErrorPlot->xAxis->setRange(0, maxIteration_);
+        totalRun_ = ui->lineEdit_totalRuns->text().toInt();
+        maxIteration_ = ui->lineEdit_maxIteration->text().toInt();
+        maxError_ = ui->lineEdit_maxError->text().toDouble();
+        delayedPlot_ = ui->checkBox_delayedPlotting->isChecked();
+        failcount_ = 0;
+        averageTime_ = 0.0;
 
-    errormin_ = std::numeric_limits<double>::max();
-    errormax_ = std::numeric_limits<double>::min();
-    errorcur_ = std::numeric_limits<double>::max();
+        ui->groupBox_trainingParameter->setEnabled(false);
+        ui->groupBox_algorithm->setEnabled(false);
 
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
-    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_trainingFinished()));
-    QFuture<bool> training = QtConcurrent::run(this, &MainWindow::training);
-    watcher->setFuture(training);
+        ui->pushButton_Configuration->setEnabled(false);
+        ui->pushButton_ClearPlot->setEnabled(false);
+        ui->pushButton_Validate->setEnabled(false);
 
-    progressBar_->setMaximum(totalRun_);
-    progressBar_->setValue(0);
-    progressBar_->setHidden(false);
+        ui->customPlot_ErrorPlot->xAxis->setRange(0, maxIteration_);
+
+        errorcur_ = std::numeric_limits<double>::max();
+
+        QFutureWatcher<void> *watcher = new QFutureWatcher<void>;
+        QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_my_trainingFinished()));
+        QFuture<void> training = QtConcurrent::run(this, &MainWindow::training);
+        watcher->setFuture(training);
+
+        progressBar_->setMaximum(totalRun_);
+        progressBar_->setValue(0);
+        progressBar_->setHidden(false);
+
+        ui->pushButton_Train->setText("Cancel");
+    }
 }
 
-void MainWindow::on_trainingFinished()
+void MainWindow::on_my_trainingFinished()
 {
     progressBar_->setHidden(true);
 
-    if (failcount_ < totalRun_)
-        nbn_->set_weight(weights_.toStdVector());
+    if (delayedPlot_)
+        ui->customPlot_ErrorPlot->replot();
 
-//    if (success) {
-//        ui->pushButton_ClearPlot->setEnabled(true);
-//        ui->pushButton_Validate->setEnabled(true);
-//    }
+    if (failcount_ < totalRun_) {
+        // At lease one training is successful.
+        nbn_->set_weights(weights_.toStdVector());
+        ui->pushButton_Validate->setEnabled(true);
+    }
+
+    ui->progressBar_successRate->setMaximum(totalRun_);
+
+    training_ = false;
+    ui->pushButton_ClearPlot->setEnabled(true);
+    ui->pushButton_Configuration->setEnabled(true);
+    ui->pushButton_Train->setText("Train");
+    ui->groupBox_trainingParameter->setEnabled(true);
+    ui->groupBox_algorithm->setEnabled(true);
 }
 
-bool MainWindow::training()
+void MainWindow::training()
 {
     std::vector<double> inputs, desired_outputs;
     {
@@ -228,13 +247,25 @@ bool MainWindow::training()
     }
 
     for (int runs = 0; runs < totalRun_; ++runs) {
+
+        mutex_cancel_.lock();
+        if (canceled_) {
+            QMetaObject::invokeMethod(this, "on_my_canceled", Qt::QueuedConnection,
+                                      Q_ARG(int, runs));
+            mutex_cancel_.unlock();
+            break;
+        }
+        mutex_cancel_.unlock();
+
         nbn_->random_weights();
         bool success = nbn_->train(inputs, desired_outputs, maxIteration_, maxError_);
+
+        averageTime_ = (averageTime_ * runs + nbn_->elapsed()) / (runs + 1);
 
         // This mutex will be released in on_errorReady() when the plotting of
         // current errors is finished.  This may incur some delay, but most of
         // time, it's unnoticable.
-        mutex_.lock();
+        mutex_error_.lock();
 
         if (!success) ++failcount_;
 
@@ -242,33 +273,45 @@ bool MainWindow::training()
 
         if (errors_.back() < errorcur_) {
             errorcur_ = errors_.back();
-            weights_ = QVector<double>::fromStdVector(nbn_->get_weight());
+            weights_ = QVector<double>::fromStdVector(nbn_->get_weights());
         }
 
-        QMetaObject::invokeMethod(this, "on_errorReady", Qt::QueuedConnection,
+        QMetaObject::invokeMethod(this, "on_my_errorReady", Qt::QueuedConnection,
                                   Q_ARG(int, runs + 1));
     }
-    return true;
 }
 
-void MainWindow::on_errorReady(int runs)
+void MainWindow::on_my_errorReady(int runs)
 {
     QVector<double> x;
-    for (int i = 0; i < errors_.size(); ++i) {
+    for (int i = 0; i < errors_.size(); ++i)
         x.push_back(i);
-        if (errors_[i] < errormin_) errormin_ = errors_[i];
-        if (errors_[i] > errormax_) errormax_ = errors_[i];
-    }
+
     ui->customPlot_ErrorPlot->addGraph();
-    ui->customPlot_ErrorPlot->yAxis->setRange(errormin_, errormax_);
     ui->customPlot_ErrorPlot->graph()->setData(x, errors_);
-    ui->customPlot_ErrorPlot->replot();
+    if (!delayedPlot_) {
+        ui->customPlot_ErrorPlot->rescaleAxes();
+        ui->customPlot_ErrorPlot->replot();
+    }
     progressBar_->setValue(runs);
 
+    ui->progressBar_successRate->setValue(runs - failcount_);
+    ui->label_currentError->setText(QString("%1").arg(errors_.back(), 0, 'f', 5));
+    ui->label_averageTime->setText(QString("%1").arg(averageTime_, 0, 'f', 5));
+
     // Current errors are finished, release the mutex.
-    mutex_.unlock();
+    mutex_error_.unlock();
+}
+
+void MainWindow::on_my_canceled(int runs)
+{
+    totalRun_ = runs;
+    on_my_trainingFinished();
 }
 
 void MainWindow::on_pushButton_ClearPlot_clicked()
 {
+    ui->customPlot_ErrorPlot->clearGraphs();
+    ui->customPlot_ErrorPlot->replot();
+    ui->pushButton_ClearPlot->setEnabled(false);
 }

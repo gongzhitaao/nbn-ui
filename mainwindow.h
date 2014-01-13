@@ -25,17 +25,17 @@ signals:
     void errorReady(int);
 
 private slots:
-    void on_parsingFinished();
+    void on_my_parsingFinished();
 
-    void on_errorReady(int);
+    void on_my_errorReady(int);
 
-    void on_trainingFinished();
+    void on_my_trainingFinished();
+
+    void on_my_canceled(int);
 
     void on_comboBox_Algorithm_currentIndexChanged(int index);
 
     void on_pushButton_Configuration_clicked();
-
-    void on_actionConfiguration_triggered();
 
     void on_actionExit_triggered();
 
@@ -45,12 +45,10 @@ private slots:
 
 private:
     bool configuration(const QString &fileName);
-    bool training();
+    void training();
 
     Ui::MainWindow *ui;
     QProgressBar *progressBar_;
-
-    QMutex mutex_;
 
     QString lastConfPath_;
     QString lastDataPath_;
@@ -60,13 +58,21 @@ private:
 
     int totalRun_;
     int maxIteration_;
-    int maxError_;
+    double maxError_;
     int failcount_;
 
+    QMutex mutex_error_;
     QVector<double> errors_;
-    double errormin_, errormax_, errorcur_;
+    double errorcur_;
+
+    QMutex mutex_cancel_;
+    bool training_, canceled_;
+
+    bool delayedPlot_;
 
     QVector<double> weights_;
+
+    double averageTime_;
 };
 
 #endif // MAINWINDOW_H
