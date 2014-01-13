@@ -6,22 +6,22 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>814</width>
-    <height>627</height>
+    <width>942</width>
+    <height>617</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <layout class="QGridLayout" name="gridLayout_6" rowstretch="1,0,0" columnstretch="1,1,1,1">
-    <item row="0" column="0" rowspan="2" colspan="3">
+   <layout class="QGridLayout" name="gridLayout_6" rowstretch="1,0" columnstretch="1,1,1,1">
+    <item row="0" column="0" colspan="3">
      <widget class="QCustomPlot" name="customPlot_ErrorPlot" native="true"/>
     </item>
     <item row="0" column="3">
      <widget class="QTableView" name="tableView_Information">
       <attribute name="horizontalHeaderVisible">
-       <bool>true</bool>
+       <bool>false</bool>
       </attribute>
       <attribute name="horizontalHeaderStretchLastSection">
        <bool>true</bool>
@@ -34,8 +34,176 @@
       </attribute>
      </widget>
     </item>
-    <item row="1" column="3" rowspan="2">
-     <widget class="QGroupBox" name="groupBox_2">
+    <item row="1" column="0">
+     <widget class="QGroupBox" name="groupBox_3">
+      <property name="title">
+       <string>Summary</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout">
+       <item row="0" column="0">
+        <widget class="QLabel" name="label_13">
+         <property name="text">
+          <string>Average Time</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLabel" name="label_averageTime">
+         <property name="text">
+          <string>0</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_17">
+         <property name="text">
+          <string>Current Error</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLabel" name="label_currentError">
+         <property name="text">
+          <string>0.0</string>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_19">
+         <property name="text">
+          <string>Success Rate</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QProgressBar" name="progressBar_successRate">
+         <property name="value">
+          <number>0</number>
+         </property>
+         <property name="format">
+          <string>%v /  %m</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="1" column="1">
+     <widget class="QGroupBox" name="groupBox_trainingParameter">
+      <property name="title">
+       <string>Training Parameter</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <item row="1" column="0">
+        <widget class="QLabel" name="label_2">
+         <property name="toolTip">
+          <string>Maximum iteration for each training process.</string>
+         </property>
+         <property name="text">
+          <string>Max Iteration</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QLabel" name="label">
+         <property name="toolTip">
+          <string>Total number of times trying to train the network, each of which will start with random weights.</string>
+         </property>
+         <property name="text">
+          <string>Total Runs</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="lineEdit_totalRuns"/>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLineEdit" name="lineEdit_maxIteration"/>
+       </item>
+       <item row="2" column="0">
+        <widget class="QLabel" name="label_4">
+         <property name="text">
+          <string>Max Error</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLineEdit" name="lineEdit_maxError">
+         <property name="toolTip">
+          <string>Desired error to reach for each training.</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="1" column="2">
+     <widget class="QGroupBox" name="groupBox_controls">
+      <property name="title">
+       <string>Controls</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_7">
+       <item row="0" column="0" colspan="2">
+        <widget class="QCheckBox" name="checkBox_delayedPlotting">
+         <property name="toolTip">
+          <string>Check this to delay error plotting until all trainings are finished.  This might achieve a little speed up.</string>
+         </property>
+         <property name="text">
+          <string>Delayed Plotting</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="0">
+        <widget class="QPushButton" name="pushButton_Configuration">
+         <property name="toolTip">
+          <string>Reading topology file.</string>
+         </property>
+         <property name="text">
+          <string>Configuration</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QPushButton" name="pushButton_ClearPlot">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Clear Plot</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QPushButton" name="pushButton_Train">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Training</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QPushButton" name="pushButton_Validate">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Validate</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="1" column="3">
+     <widget class="QGroupBox" name="groupBox_algorithm">
       <property name="title">
        <string>Algorithm</string>
       </property>
@@ -57,29 +225,35 @@
        <item row="1" column="0">
         <widget class="QStackedWidget" name="stackedWidget_AlgorithmParam">
          <property name="currentIndex">
-          <number>1</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="page">
           <layout class="QGridLayout" name="gridLayout_4">
-           <item row="0" column="0" colspan="2">
+           <item row="0" column="0">
             <widget class="QLabel" name="label_5">
+             <property name="toolTip">
+              <string>Learning constant.</string>
+             </property>
              <property name="text">
-              <string>Learning Rate</string>
+              <string>𝞪</string>
              </property>
             </widget>
            </item>
-           <item row="0" column="2">
-            <widget class="QLineEdit" name="lineEdit_5"/>
+           <item row="0" column="1">
+            <widget class="QLineEdit" name="lineEdit_learningConstant"/>
            </item>
            <item row="1" column="0">
             <widget class="QLabel" name="label_11">
+             <property name="toolTip">
+              <string>Momentum..</string>
+             </property>
              <property name="text">
-              <string>Momentum</string>
+              <string>m</string>
              </property>
             </widget>
            </item>
-           <item row="1" column="1" colspan="2">
-            <widget class="QLineEdit" name="lineEdit_11"/>
+           <item row="1" column="1">
+            <widget class="QLineEdit" name="lineEdit_momentum"/>
            </item>
           </layout>
          </widget>
@@ -87,53 +261,55 @@
           <layout class="QGridLayout" name="gridLayout_3">
            <item row="0" column="0">
             <widget class="QLabel" name="label_6">
+             <property name="toolTip">
+              <string>This is the splitting factor which will be adjust dynamically during training.</string>
+             </property>
              <property name="text">
-              <string>TextLabel</string>
+              <string>𝞵</string>
              </property>
             </widget>
            </item>
            <item row="0" column="1">
-            <widget class="QLineEdit" name="lineEdit_6"/>
+            <widget class="QLineEdit" name="lineEdit_mu"/>
+           </item>
+           <item row="0" column="2">
+            <widget class="QLabel" name="label_9">
+             <property name="toolTip">
+              <string>Scale factor for 𝞵.</string>
+             </property>
+             <property name="text">
+              <string>𝞪</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="3">
+            <widget class="QLineEdit" name="lineEdit_factor"/>
            </item>
            <item row="1" column="0">
             <widget class="QLabel" name="label_7">
+             <property name="toolTip">
+              <string>Maximum value for 𝞵, i.e. 𝞵 may not scale up beyond this.</string>
+             </property>
              <property name="text">
-              <string>TextLabel</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;𝞵&lt;span style=&quot; vertical-align:sub;&quot;&gt;max&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
             </widget>
            </item>
            <item row="1" column="1">
-            <widget class="QLineEdit" name="lineEdit_7"/>
+            <widget class="QLineEdit" name="lineEdit_muMax"/>
            </item>
-           <item row="2" column="0">
+           <item row="1" column="2">
             <widget class="QLabel" name="label_8">
+             <property name="toolTip">
+              <string>Minimum value for 𝞵, i.e. 𝞵 may not scale down below this.</string>
+             </property>
              <property name="text">
-              <string>TextLabel</string>
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;𝞵&lt;span style=&quot; vertical-align:sub;&quot;&gt;min&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
             </widget>
            </item>
-           <item row="2" column="1">
-            <widget class="QLineEdit" name="lineEdit_8"/>
-           </item>
-           <item row="3" column="0">
-            <widget class="QLabel" name="label_9">
-             <property name="text">
-              <string>TextLabel</string>
-             </property>
-            </widget>
-           </item>
-           <item row="3" column="1">
-            <widget class="QLineEdit" name="lineEdit_9"/>
-           </item>
-           <item row="4" column="0">
-            <widget class="QLabel" name="label_10">
-             <property name="text">
-              <string>TextLabel</string>
-             </property>
-            </widget>
-           </item>
-           <item row="4" column="1">
-            <widget class="QLineEdit" name="lineEdit_10"/>
+           <item row="1" column="3">
+            <widget class="QLineEdit" name="lineEdit_muMin"/>
            </item>
           </layout>
          </widget>
@@ -141,146 +317,6 @@
        </item>
       </layout>
      </widget>
-    </item>
-    <item row="2" column="0">
-     <widget class="QGroupBox" name="groupBox_3">
-      <property name="title">
-       <string>Summary</string>
-      </property>
-      <layout class="QGridLayout" name="gridLayout">
-       <item row="0" column="0">
-        <widget class="QLabel" name="label_13">
-         <property name="text">
-          <string>Average Time</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QLabel" name="label_16">
-         <property name="text">
-          <string>0</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_17">
-         <property name="text">
-          <string>Current Error</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QLabel" name="label_18">
-         <property name="text">
-          <string>0.0</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_19">
-         <property name="text">
-          <string>Success Rate</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QLabel" name="label_20">
-         <property name="text">
-          <string>0</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item row="2" column="1">
-     <widget class="QGroupBox" name="groupBox">
-      <property name="title">
-       <string>Training Parameter</string>
-      </property>
-      <layout class="QGridLayout" name="gridLayout_2">
-       <item row="0" column="0">
-        <widget class="QLabel" name="label">
-         <property name="text">
-          <string>Total Runs</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QLineEdit" name="lineEdit_totalRuns"/>
-       </item>
-       <item row="1" column="0">
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>Max Iteration</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QLineEdit" name="lineEdit_maxIteration"/>
-       </item>
-       <item row="2" column="0">
-        <widget class="QLabel" name="label_4">
-         <property name="text">
-          <string>Max Error</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QLineEdit" name="lineEdit_maxError"/>
-       </item>
-      </layout>
-     </widget>
-    </item>
-    <item row="2" column="2">
-     <layout class="QVBoxLayout" name="verticalLayout">
-      <item>
-       <widget class="QPushButton" name="pushButton_Configuration">
-        <property name="text">
-         <string>Configuration</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_ClearPlot">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="text">
-         <string>Clear Plot</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_Train">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="text">
-         <string>Training</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_Validate">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="text">
-         <string>Validate</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
     </item>
    </layout>
   </widget>
@@ -289,7 +325,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>814</width>
+     <width>942</width>
      <height>20</height>
     </rect>
    </property>
@@ -297,22 +333,6 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <widget class="QMenu" name="menu_Save">
-     <property name="title">
-      <string>&amp;Save</string>
-     </property>
-     <addaction name="actionParameter"/>
-     <addaction name="actionError_Plot"/>
-    </widget>
-    <widget class="QMenu" name="menu_Open">
-     <property name="title">
-      <string>&amp;Open</string>
-     </property>
-     <addaction name="actionConfiguration"/>
-     <addaction name="actionData"/>
-    </widget>
-    <addaction name="menu_Open"/>
-    <addaction name="menu_Save"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
@@ -333,26 +353,6 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Q</string>
-   </property>
-  </action>
-  <action name="actionParameter">
-   <property name="text">
-    <string>Parameter</string>
-   </property>
-  </action>
-  <action name="actionError_Plot">
-   <property name="text">
-    <string>Error Plot</string>
-   </property>
-  </action>
-  <action name="actionConfiguration">
-   <property name="text">
-    <string>Configuration</string>
-   </property>
-  </action>
-  <action name="actionData">
-   <property name="text">
-    <string>Training Data</string>
    </property>
   </action>
  </widget>
