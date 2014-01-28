@@ -19,19 +19,13 @@
      <widget class="QCustomPlot" name="customPlot_ErrorPlot" native="true"/>
     </item>
     <item row="0" column="3">
-     <widget class="QTableView" name="tableView_Information">
-      <attribute name="horizontalHeaderVisible">
-       <bool>false</bool>
-      </attribute>
-      <attribute name="horizontalHeaderStretchLastSection">
+     <widget class="QTextBrowser" name="textBrowser_message">
+      <property name="enabled">
        <bool>true</bool>
-      </attribute>
-      <attribute name="verticalHeaderVisible">
-       <bool>false</bool>
-      </attribute>
-      <attribute name="verticalHeaderCascadingSectionResizes">
-       <bool>false</bool>
-      </attribute>
+      </property>
+      <property name="lineWrapMode">
+       <enum>QTextEdit::NoWrap</enum>
+      </property>
      </widget>
     </item>
     <item row="1" column="0">
