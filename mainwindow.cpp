@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 
+#include <QDateTime>
 #include <QProgressBar>
 #include <QtConcurrent/QtConcurrent>
 #include <QDir>
@@ -62,6 +63,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->lineEdit_factor->setText(QString::number(nbn_->get_scale_up()));
     ui->lineEdit_muMax->setText(QString::number(nbn_->get_mu_max()));
     ui->lineEdit_muMin->setText(QString::number(nbn_->get_mu_min()));
+
+    watcher_ = new QFutureWatcher<bool>;
 }
 
 MainWindow::~MainWindow()
@@ -69,6 +72,7 @@ MainWindow::~MainWindow()
     delete ui;
     delete nbn_;
     delete progressBar_;
+    delete watcher_;
 }
 
 void MainWindow::on_comboBox_Algorithm_currentIndexChanged(int index)
@@ -88,15 +92,35 @@ void MainWindow::on_pushButton_Configuration_clicked()
 
     lastConfPath_ = QFileInfo(fileName).path();
 
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>;
-    QObject::connect(watcher, SIGNAL(finished()), this, SLOT(on_my_parsingFinished()));
+    QObject::connect(watcher_, SIGNAL(finished()), this, SLOT(on_my_parsingFinished()));
     QFuture<bool> parser = QtConcurrent::run(this, &MainWindow::configuration, fileName);
-    watcher->setFuture(parser);
+    watcher_->setFuture(parser);
 }
 
 void MainWindow::on_my_parsingFinished()
 {
-    ui->pushButton_Train->setEnabled(true);
+    if (watcher_->future().result()) {
+        ui->pushButton_Train->setEnabled(true);
+
+        std::vector<int> vec = nbn_->get_layer_size();
+        QString arch = QString::number(vec[0]);
+        for (size_t i = 1; i < vec.size(); ++i)
+            arch += QString(" - %1").arg(vec[i]);
+
+        QString msg = QString("Number of neurons: <b>%1</b><br/>"
+                              "Number of input: <b>%2</b><br/>"
+                              "Number of output: <b>%3</b><br/>"
+                              "Architecture: <b>%4</b><br/>"
+                              "Data file: <b>%5</b><br/>")
+                .arg(nbn_->get_num_neuron())
+                .arg(nbn_->get_num_input())
+                .arg(nbn_->get_num_output())
+                .arg(arch)
+                .arg(dataFile_);
+        ui->textBrowser_message->append(msg);
+    } else {
+        // TODO: show some message indicating parsing error.
+    }
 }
 
 bool MainWindow::configuration(const QString &fileName)
@@ -354,8 +378,6 @@ void MainWindow::on_my_errorReady(int runs)
 void MainWindow::on_my_canceled(int runs)
 {
     totalRun_ = runs;
-    on_my_trainingFinished();
-
     if (close_) this->close();
 }
 

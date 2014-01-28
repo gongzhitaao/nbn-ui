@@ -79,6 +79,8 @@ private:
     QVector<double> weights_;
 
     double averageTime_;
+
+    QFutureWatcher<bool> *watcher_;
 };
 
 #endif // MAINWINDOW_H
