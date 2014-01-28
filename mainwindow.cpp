@@ -13,7 +13,7 @@
 #include <QFileInfo>
 #include <QFlags>
 
-#include "nbn.h"
+#include "core/nbn.h"
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -39,6 +39,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     training_ = false;
     canceled_ = false;
+    close_ = false;
 
     progressBar_ = new QProgressBar(ui->statusBar);
     progressBar_->setHidden(true);
@@ -48,6 +49,19 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->statusBar->addPermanentWidget(progressBar_);
     progressBar_->setMaximum(totalRun_);
     progressBar_->setValue(0);
+
+    ui->lineEdit_totalRuns->setText(QString::number(100));
+    ui->lineEdit_maxError->setText(QString::number(0.001));
+    maxIterationSave_ = {100000, 300};
+
+    ui->comboBox_Algorithm->setCurrentIndex(1);
+
+    ui->lineEdit_learningConstant->setText(QString::number(nbn_->get_learning_const()));
+    ui->lineEdit_momentum->setText(QString::number(nbn_->get_momentum()));
+    ui->lineEdit_mu->setText(QString::number(nbn_->get_mu()));
+    ui->lineEdit_factor->setText(QString::number(nbn_->get_scale_up()));
+    ui->lineEdit_muMax->setText(QString::number(nbn_->get_mu_max()));
+    ui->lineEdit_muMin->setText(QString::number(nbn_->get_mu_min()));
 }
 
 MainWindow::~MainWindow()
@@ -60,6 +74,8 @@ MainWindow::~MainWindow()
 void MainWindow::on_comboBox_Algorithm_currentIndexChanged(int index)
 {
     ui->stackedWidget_AlgorithmParam->setCurrentIndex(index);
+    ui->lineEdit_maxIteration->setText(QString::number(maxIterationSave_[index]));
+    nbn_->set_algorithm((NBN::nbn_train_enum)index);
 }
 
 void MainWindow::on_pushButton_Configuration_clicked()
@@ -147,9 +163,6 @@ bool MainWindow::configuration(const QString &fileName)
     }
 
     nbn_->set_topology(topology.toStdVector());
-
-    nbn_->init_default();
-
     nbn_->set_gains(gains.toStdVector());
     nbn_->set_activations(activations.toStdVector());
 
@@ -159,6 +172,17 @@ bool MainWindow::configuration(const QString &fileName)
 void MainWindow::on_actionExit_triggered()
 {
     this->close();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (training_) {
+        event->ignore();
+        close_ = true;
+        mutex_cancel_.lock();
+        canceled_ = true;
+        mutex_cancel_.unlock();
+    }
 }
 
 void MainWindow::on_pushButton_Train_clicked()
@@ -172,12 +196,36 @@ void MainWindow::on_pushButton_Train_clicked()
         training_ = true;
         canceled_ = false;
 
+        switch (ui->comboBox_Algorithm->currentIndex()) {
+        case 0:
+            nbn_->set_learning_const(ui->lineEdit_learningConstant->text().toDouble());
+            nbn_->set_momentum(ui->lineEdit_momentum->text().toDouble());
+            break;
+        case 1:
+            nbn_->set_mu(ui->lineEdit_mu->text().toDouble());
+            nbn_->set_mu_max(ui->lineEdit_muMax->text().toDouble());
+            nbn_->set_mu_min(ui->lineEdit_muMin->text().toDouble());
+            double factor = ui->lineEdit_factor->text().toDouble();
+            double scaleup, scaledown;
+            if (factor > 1.0) {
+                scaleup = factor;
+                scaledown = 1.0 / factor;
+            } else {
+                scaledown = factor;
+                scaleup = 1.0 / factor;
+            }
+            nbn_->set_scale_up(scaleup);
+            nbn_->set_scale_down(scaledown);
+        }
+
         totalRun_ = ui->lineEdit_totalRuns->text().toInt();
         maxIteration_ = ui->lineEdit_maxIteration->text().toInt();
         maxError_ = ui->lineEdit_maxError->text().toDouble();
         delayedPlot_ = ui->checkBox_delayedPlotting->isChecked();
         failcount_ = 0;
         averageTime_ = 0.0;
+
+        maxIterationSave_[ui->comboBox_Algorithm->currentIndex()] = maxIteration_;
 
         ui->groupBox_trainingParameter->setEnabled(false);
         ui->groupBox_algorithm->setEnabled(false);
@@ -296,8 +344,8 @@ void MainWindow::on_my_errorReady(int runs)
     progressBar_->setValue(runs);
 
     ui->progressBar_successRate->setValue(runs - failcount_);
-    ui->label_currentError->setText(QString("%1").arg(errors_.back(), 0, 'f', 5));
-    ui->label_averageTime->setText(QString("%1").arg(averageTime_, 0, 'f', 5));
+    ui->label_currentError->setText(QString("%1").arg(errors_.back(), 0, 'g', 5));
+    ui->label_averageTime->setText(QString("%1").arg(averageTime_, 0, 'g', 5));
 
     // Current errors are finished, release the mutex.
     mutex_error_.unlock();
@@ -307,6 +355,8 @@ void MainWindow::on_my_canceled(int runs)
 {
     totalRun_ = runs;
     on_my_trainingFinished();
+
+    if (close_) this->close();
 }
 
 void MainWindow::on_pushButton_ClearPlot_clicked()
